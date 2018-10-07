@@ -102,7 +102,18 @@ We also note that some of the images are mirrored versions of the others, specif
 as simple horizontal flipping severely changes the meaning of these signs.
 We can also differentiate "no" signs ([Verbotszeichen](https://de.wikipedia.org/wiki/Verbotszeichen) and "do" signs ([Gebotszeichen](https://de.wikipedia.org/wiki/Gebotszeichen)) by color, the former being red, the latter being blue. Interestingly, some papers find that ignoring color results in higher classification accuracy.
 
-When looking at the class distribution, we find that some classes are severely underrepresented compared to others. While there are less than 200 examples for the 20 km/h speed limit, we find about 2000 examples for the 50 km/h speed limit.
+When looking at the images as they appear in the dataset, we also find that they tend
+to look extremely similar. This might be simply due to the was the images were collected
+while driving a car:
+
+![First images per class](images/class-first.png)
+
+To ensure that images actually vary, we can now look at e.g. the last few images per class
+where we indeed observe some variation:
+
+![Last images per class](images/class-last.png)
+
+When looking at the class distribution, we find that some classes are severely underrepresented compared to others. While there are 180 examples for the 20 km/h speed limit, we find about 2010 examples for the 50 km/h speed limit. The average number of examples per class was 809, at a median of 540.
 
 ![Data distribution](images/class-distribution.png)
 
@@ -113,19 +124,25 @@ We could mitigate this by augmenting images in the underrepresented classes or b
 #### 1. Describe how you preprocessed the image data. What techniques were chosen and why did you choose these techniques? Consider including images showing the output of each preprocessing technique. Pre-processing refers to techniques such as converting to grayscale, normalization, etc.
 
 In order to establish a baseline, the images were simply normalized to a `-1...1` value
-range before passing them to the simple LeNet-like model. While keeping the architecture
-identical, scale, rotation and shift augmentations were added to the training step.
+range before passing them to the simple LeNet-like model.
 
 In later experiments, the images were normalized according to the training dataset
-mean and variation, resulting in a slightly higher validation and test accuracy.
+mean and variance, while adding scale, rotation and shift augmentations using the [imgaug](https://github.com/aleju/imgaug) library, resulting in a slightly higher validation and test accuracy.
+
+Here's an example of an unaltered input image:
+
+![](images/sample-sign.png)
+
+By adding randomized augmentations, here's one possible variation of the above image:
+
+![](images/sample-sign-augmented.png)
+
 Experiments with grayscale images were not conducted, however a third and fourth experiment
 was run using depthwise separable convolutions with trivially (i.e. range) normalized
 images in YUV color space. The reasoning here was that papers reported higher accuracy
 with grayscale images (here represented by the Y channel); as previously described
 however, color information should provide some discriminative advantage for classification
 of traffic signs, as different classes of signs exhibit different colors (mostly red, blue and white). 
-
-By using depthwise separable convolution, the network is forced to learn filters specific to the intensity and color domains of the input image color space.
 
 #### 2. Describe what your final model architecture looks like including model type, layers, layer sizes, connectivity, etc.) Consider including a diagram and/or table describing the final model.
 
@@ -134,7 +151,8 @@ the following layers:
 
 | Layer         		|     Description	        					| 
 |:---------------------:|:---------------------------------------------:| 
-| Input         		| 32x32x3 RGB image                             | 
+| Input         		| 32x32x3 RGB image                             |
+| Range normalization   |                                               | 
 | Convolution 5x5     	| 1x1 stride, valid padding, 6 filters          |
 | RELU					|												|
 | Max pooling 2x2       | 2x2 stride                                    |
@@ -149,90 +167,134 @@ the following layers:
 | Softmax				|            									|
 
 A different approach using residual/skip connections was implemented as well, but
-resulted in a worse classification accuracy. 
+resulted in a worse classification accuracy. Some variations of this setup
+were used and experimented with, including different setups of fully connected
+layers, number of filters, dropout, etc.
 
 | Layer         		|     Description	        					| 
 |:---------------------:|:---------------------------------------------:| 
-| Input         		| 32x32x3 RGB image                             | 
-| Convolution 5x5     	| 1x1 stride, valid padding, 6 filters          |
+| Input         		| 32x32x3 RGB image                             |
+| Range normalization   |                                               | 
+| Depth Convolution 5x5     	| depthwise separable, depth multiplier 16, 1x1 stride, valid padding, 6 filters          |
+| Max pooling 5x5       | 5x5 stride                                    |
+| Batch normalizartion	|												|
+| RELU					| Flattened as fc_1	                            |
+| Convolution 3x3     	| 1x1 stride, valid padding, 16 filters         |
+| Max pooling 3x3       | 3x3 stride                                    |
 | RELU					|												|
-| Max pooling 2x2       | 2x2 stride                                    |
-| Convolution 5x5     	| 1x1 stride, valid padding, 16 filters         |
-| RELU					|												|
-| Max pooling 2x2       | 2x2 stride                                    |
-| Fully connected       | 120 output neurons                            |
-| RELU					|												|
-| Fully connected       | 84 output neurons                             |
+| Convolution 3x3     	| 1x1 stride, valid padding, 16 filters         |
+| RELU					| Flattened as fc_3                             |
+| Concatenation         | Combining fc_1 and fc_3 flattened outputs     |
+| Fully connected       | 24 output neurons bottleneck                  |
 | RELU					|												|
 | Fully connected       | 44 output neurons                             |
 | Softmax				|            									|
 
 #### 3. Describe how you trained your model. The discussion can include the type of optimizer, the batch size, number of epochs and any hyperparameters such as learning rate.
 
-To train the model, I used an ....
+The model was trained using the Adam optimizer with a learning rate of `1e-4` and,
+at times, `1e-3` and `1e-5`. The training was bottlenecked by the CPU, so batch size
+was kept fairly small at around `32` images per batch so as to not stall in the
+single-threaded preprocessing part for too long. The number of epochs was varied
+between `100` and `1000`, however no improvement was observed after
+approximately `300` epochs; due to time constraints, between `100` and `200`
+epochs were used ultimately.
 
 #### 4. Describe the approach taken for finding a solution and getting the validation set accuracy to be at least 0.93. Include in the discussion the results on the training, validation and test sets and where in the code these were calculated. Your approach may have been an iterative process, in which case, outline the steps you took to get to the final solution and why you chose those steps. Perhaps your solution involved an already well known implementation or architecture. In this case, discuss why you think the architecture is suitable for the current problem.
 
 My final model results were:
-* training set accuracy of ?
-* validation set accuracy of ? 
-* test set accuracy of ?
+* training set accuracy was not logged numerically (since training snapshots were taked based on the validation accuracy). The following image shows a training accuracy around `1.0`. 
+* validation set accuracy of `0.963` 
+* test set accuracy of `0.87`.
 
-If an iterative approach was chosen:
-* What was the first architecture that was tried and why was it chosen?
-* What were some problems with the initial architecture?
-* How was the architecture adjusted and why was it adjusted? Typical adjustments could include choosing a different model architecture, adding or taking away layers (pooling, dropout, convolution, etc), using an activation function or changing the activation function. One common justification for adjusting an architecture would be due to overfitting or underfitting. A high accuracy on the training set but low accuracy on the validation set indicates over fitting; a low accuracy on both sets indicates under fitting.
-* Which parameters were tuned? How were they adjusted and why?
-* What are some of the important design choices and why were they chosen? For example, why might a convolution layer work well with this problem? How might a dropout layer help with creating a successful model?
+##### Training accuracy
 
-If a well known architecture was chosen:
-* What architecture was chosen?
-* Why did you believe it would be relevant to the traffic sign application?
-* How does the final model's accuracy on the training, validation and test set provide evidence that the model is working well?
+Training accuracy quickly went toward `1.0`, indicating beginning of overfitting.
+Due to dataset augmentation however, training accuracy grew as well.
+
+![Training accuracy](images/lenet-accuracies.png)
+
+##### Training loss
+
+We find the loss is oscillating a bit but appears to still shrink. This indicates
+that lowering the learning rate and training for more iterations/epochs could be beneficial.
+
+![Training loss](images/lenet-losses.png)
+
+With the custom network, a
+
+* lower validation set accuracy of `0.927` at 
+* a higher test set accuracy of `0.91` were achieved.
  
+The experiments with a custom architecture followed the following assumptions:
+
+- The network should not be too deep in order to keep it small and fast, as an
+ultimate goal would be to run it in realtime on an embedded device.
+- By using depthwise separable convolutions in the input layers, the network is forced to learn filters specific to the domain of the input image color space.
+- Residual connections should allow the network to utilize higher and lower level features
+for class discrimination.
+- A bottleneck layer forces the network to compress information, thus requires it to
+generalize.
+- Using batch normalization, the need to accurately normalize the input images is removed. This should also allow to experiment with different image color spaces during
+training without requiring to create different variations of training, validation and test datasets.
+- Dropout was eventually removed due to the small number of neurons in the concatenated layer.
+
+Interestingly, the training did not reach high accuracies as fast as with the LeNet
+approach and failed to correctly classify the extra test images; at the same time,
+it resulted in a higher accuracy on the test dataset.
 
 ### Test a Model on New Images
 
 #### 1. Choose five German traffic signs found on the web and provide them in the report. For each image, discuss what quality or qualities might be difficult to classify.
 
-Here are five German traffic signs that I found on the web:
+Six extra images were used to test the accuracy of the network:
 
-![alt text][image4] ![alt text][image5] ![alt text][image6] 
-![alt text][image7] ![alt text][image8]
+![](images/custom-1.png)
+![](images/custom-2.png)
+![Roundabout mandatory](images/custom-3.png)
+![](images/custom-4.png)
+![](images/custom-5.png)
+![](images/custom-6.png)
 
-The first image might be difficult to classify because ...
+Two of the images were chosen specifically because they are slightly obstructed.
 
 #### 2. Discuss the model's predictions on these new traffic signs and compare the results to predicting on the test set. At a minimum, discuss what the predictions were, the accuracy on these new predictions, and compare the accuracy to the accuracy on the test set (OPTIONAL: Discuss the results in more detail as described in the "Stand Out Suggestions" part of the rubric).
 
-Here are the results of the prediction:
+Evaluation accuracy on the custom images varied somewhat between different training runs, resulting in accuracies between 4/6 (`0.67`) and 6/6 (`1.0`). 
 
-| Image			        |     Prediction	        					| 
-|:---------------------:|:---------------------------------------------:| 
-| Stop Sign      		| Stop sign   									| 
-| U-turn     			| U-turn 										|
-| Yield					| Yield											|
-| 100 km/h	      		| Bumpy Road					 				|
-| Slippery Road			| Slippery Road      							|
+Here are the results of the prediction using the LeNet architecture (4/6 correct):
 
+| Image			        |     Prediction	        					| Confidence | 
+|:---------------------:|:---------------------------------------------:|:----------:| 
+| 80 km/h speed limit   | 80 km/h speed limit                       	| 0.99 |
+| Beware of ice/snow    | Children crossing                             | 1.00 |
+| Roundabout mandatory  | Yield											| 1.00 |
+| Yield	                | Yield      					 				| 1.00 |
+| Yield	 (dirty)        | No vehicles        							| 1.00 |
+| Priority road	(dirty) | Priority road      							| 1.00 |
 
-The model was able to correctly guess 4 of the 5 traffic signs, which gives an accuracy of 80%. This compares favorably to the accuracy on the test set of ...
+The high confidences at wrong results might indicate some overfitting.
 
-#### 3. Describe how certain the model is when predicting on each of the five new images by looking at the softmax probabilities for each prediction. Provide the top 5 softmax probabilities for each image along with the sign type of each probability. (OPTIONAL: as described in the "Stand Out Suggestions" part of the rubric, visualizations can also be provided such as bar charts)
+Here's the result for the custom architecture (5/6 correct):
 
-The code for making predictions on my final model is located in the 11th cell of the Ipython notebook.
-
-For the first image, the model is relatively sure that this is a stop sign (probability of 0.6), and the image does contain a stop sign. The top five soft max probabilities were
-
-| Probability         	|     Prediction	        					| 
-|:---------------------:|:---------------------------------------------:| 
-| .60         			| Stop sign   									| 
-| .20     				| U-turn 										|
-| .05					| Yield											|
-| .04	      			| Bumpy Road					 				|
-| .01				    | Slippery Road      							|
-
-
-For the second image ... 
+| Image			        |     Prediction	        					| Confidence |
+|:---------------------:|:---------------------------------------------:|:----------:| 
+| 80 km/h speed limit   | 80 km/h speed limit                       	| 1.00 |
+| Beware of ice/snow    | Right-of-way at the next intersection         | 0.96 |
+| Roundabout mandatory  | Roundabout mandatory                          | 1.00 | 
+| Yield	                | Bumpy Road					 				| 1.00 |
+| Yield	 (dirty)        | Yield               							| 0.89 |
+| Priority road	(dirty) | Priority road      							| 1.00 |
 
 ### (Optional) Visualizing the Neural Network (See Step 4 of the Ipython notebook for more details)
 #### 1. Discuss the visual output of your trained network's feature maps. What characteristics did the neural network use to make classifications?
+
+When looking at the activations of the first layer of the LeNet model for an 80 km/h speed limit sign, we find that the network responds strongly to red and black pixels,
+vertical, diagonal and horizontal edges.
+
+![](images/first-layer-weights.png)
+
+The second layer activations are a bit harder to interpret, but do still seem to
+exhibit the same pattern of horizontal, vertical and diagonal line activations.
+
+![](images/second-layer-weights.png)
