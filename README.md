@@ -110,44 +110,62 @@ We could mitigate this by augmenting images in the underrepresented classes or b
 
 ### Design and Test a Model Architecture
 
-#### 1. Describe how you preprocessed the image data. What techniques were chosen and why did you choose these techniques? Consider including images showing the output of each preprocessing technique. Pre-processing refers to techniques such as converting to grayscale, normalization, etc. (OPTIONAL: As described in the "Stand Out Suggestions" part of the rubric, if you generated additional data for training, describe why you decided to generate additional data, how you generated the data, and provide example images of the additional data. Then describe the characteristics of the augmented training set like number of images in the set, number of images for each class, etc.)
+#### 1. Describe how you preprocessed the image data. What techniques were chosen and why did you choose these techniques? Consider including images showing the output of each preprocessing technique. Pre-processing refers to techniques such as converting to grayscale, normalization, etc.
 
-As a first step, I decided to convert the images to grayscale because ...
+In order to establish a baseline, the images were simply normalized to a `-1...1` value
+range before passing them to the simple LeNet-like model. While keeping the architecture
+identical, scale, rotation and shift augmentations were added to the training step.
 
-Here is an example of a traffic sign image before and after grayscaling.
+In later experiments, the images were normalized according to the training dataset
+mean and variation, resulting in a slightly higher validation and test accuracy.
+Experiments with grayscale images were not conducted, however a third and fourth experiment
+was run using depthwise separable convolutions with trivially (i.e. range) normalized
+images in YUV color space. The reasoning here was that papers reported higher accuracy
+with grayscale images (here represented by the Y channel); as previously described
+however, color information should provide some discriminative advantage for classification
+of traffic signs, as different classes of signs exhibit different colors (mostly red, blue and white). 
 
-![alt text][image2]
-
-As a last step, I normalized the image data because ...
-
-I decided to generate additional data because ... 
-
-To add more data to the the data set, I used the following techniques because ... 
-
-Here is an example of an original image and an augmented image:
-
-![alt text][image3]
-
-The difference between the original data set and the augmented data set is the following ... 
-
+By using depthwise separable convolution, the network is forced to learn filters specific to the intensity and color domains of the input image color space.
 
 #### 2. Describe what your final model architecture looks like including model type, layers, layer sizes, connectivity, etc.) Consider including a diagram and/or table describing the final model.
 
-My final model consisted of the following layers:
+My final model consisted of two convolutional and three fully connected layers
+the following layers:
 
 | Layer         		|     Description	        					| 
 |:---------------------:|:---------------------------------------------:| 
-| Input         		| 32x32x3 RGB image   							| 
-| Convolution 3x3     	| 1x1 stride, same padding, outputs 32x32x64 	|
+| Input         		| 32x32x3 RGB image                             | 
+| Convolution 5x5     	| 1x1 stride, valid padding, 6 filters          |
 | RELU					|												|
-| Max pooling	      	| 2x2 stride,  outputs 16x16x64 				|
-| Convolution 3x3	    | etc.      									|
-| Fully connected		| etc.        									|
-| Softmax				| etc.        									|
-|						|												|
-|						|												|
- 
+| Max pooling 2x2       | 2x2 stride                                    |
+| Convolution 5x5     	| 1x1 stride, valid padding, 16 filters         |
+| RELU					|												|
+| Max pooling 2x2       | 2x2 stride                                    |
+| Fully connected       | 120 output neurons                            |
+| RELU					|												|
+| Fully connected       | 84 output neurons                             |
+| RELU					|												|
+| Fully connected       | 44 output neurons                             |
+| Softmax				|            									|
 
+A different approach using residual/skip connections was implemented as well, but
+resulted in a worse classification accuracy. 
+
+| Layer         		|     Description	        					| 
+|:---------------------:|:---------------------------------------------:| 
+| Input         		| 32x32x3 RGB image                             | 
+| Convolution 5x5     	| 1x1 stride, valid padding, 6 filters          |
+| RELU					|												|
+| Max pooling 2x2       | 2x2 stride                                    |
+| Convolution 5x5     	| 1x1 stride, valid padding, 16 filters         |
+| RELU					|												|
+| Max pooling 2x2       | 2x2 stride                                    |
+| Fully connected       | 120 output neurons                            |
+| RELU					|												|
+| Fully connected       | 84 output neurons                             |
+| RELU					|												|
+| Fully connected       | 44 output neurons                             |
+| Softmax				|            									|
 
 #### 3. Describe how you trained your model. The discussion can include the type of optimizer, the batch size, number of epochs and any hyperparameters such as learning rate.
 
